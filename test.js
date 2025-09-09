@@ -110,6 +110,19 @@ test('stripWWW option', t => {
 
 	const tooLongTLDURL = 'http://www.sorhus.' + ''.padEnd(64, 'a');
 	t.is(normalizeUrl(tooLongTLDURL, options2), tooLongTLDURL);
+	
+	// Issue #109 - Should strip www from multi-level subdomains
+	t.is(normalizeUrl('www.unix.stackexchange.com'), 'http://unix.stackexchange.com');
+	t.is(normalizeUrl('https://www.unix.stackexchange.com'), 'https://unix.stackexchange.com');
+	t.is(normalizeUrl('www.api.example.com'), 'http://api.example.com');
+	
+	// Issue #38 - Should NOT strip www when it would break the domain
+	t.is(normalizeUrl('www.com'), 'http://www.com');
+	t.is(normalizeUrl('https://www.com'), 'https://www.com');
+	
+	// Edge case: www.www.com should NOT be stripped (intentional behavior)
+	t.is(normalizeUrl('www.www.com'), 'http://www.www.com');
+	t.is(normalizeUrl('www.www.example.com'), 'http://www.www.example.com');
 });
 
 test('removeQueryParameters option', t => {
