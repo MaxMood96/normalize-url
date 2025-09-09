@@ -439,6 +439,53 @@ test('encoded backslashes do not get decoded', t => {
 	t.is(normalizeUrl('https://foo.com/something\\else/great'), 'https://foo.com/something/else/great');
 });
 
+test('removePath option', t => {
+	// Boolean: Remove entire path
+	t.is(normalizeUrl('https://example.com/path/to/page', {removePath: true}), 'https://example.com');
+	t.is(normalizeUrl('https://example.com/path/to/page?query=1', {removePath: true}), 'https://example.com/?query=1');
+	t.is(normalizeUrl('https://example.com/path/to/page#hash', {removePath: true}), 'https://example.com/#hash');
+	t.is(normalizeUrl('https://example.com/', {removePath: true}), 'https://example.com');
+	t.is(normalizeUrl('https://example.com', {removePath: true}), 'https://example.com');
+	
+	// With other options
+	t.is(normalizeUrl('https://example.com/path/', {removePath: true, removeTrailingSlash: true}), 'https://example.com');
+	t.is(normalizeUrl('https://www.example.com/path', {removePath: true, stripWWW: true}), 'https://example.com');
+});
+
+test('transformPath option', t => {
+	// Function: Keep only first path component
+	const keepFirst = pathComponents => pathComponents.slice(0, 1);
+	t.is(normalizeUrl('https://example.com/api/v1/users', {transformPath: keepFirst}), 'https://example.com/api');
+	t.is(normalizeUrl('https://example.com/path/to/page', {transformPath: keepFirst}), 'https://example.com/path');
+	t.is(normalizeUrl('https://example.com/', {transformPath: keepFirst}), 'https://example.com');
+	
+	// Function: Remove specific component
+	const removeAdmin = pathComponents => pathComponents.filter(c => c !== 'admin');
+	t.is(normalizeUrl('https://example.com/admin/users', {transformPath: removeAdmin}), 'https://example.com/users');
+	t.is(normalizeUrl('https://example.com/path/admin/page', {transformPath: removeAdmin}), 'https://example.com/path/page');
+	
+	// Function: Custom logic
+	const customLogic = pathComponents => {
+		if (pathComponents[0] === 'api') {
+			return pathComponents.slice(0, 1); // Keep /api only
+		}
+		return []; // Remove everything else
+	};
+	t.is(normalizeUrl('https://example.com/api/v1/users', {transformPath: customLogic}), 'https://example.com/api');
+	t.is(normalizeUrl('https://example.com/other/path', {transformPath: customLogic}), 'https://example.com');
+	
+	// Edge cases
+	t.is(normalizeUrl('https://example.com/path', {transformPath: () => []}), 'https://example.com');
+	t.is(normalizeUrl('https://example.com/path', {transformPath: () => null}), 'https://example.com');
+	t.is(normalizeUrl('https://example.com/path', {transformPath: () => undefined}), 'https://example.com');
+	
+	// Combining with removePath (removePath should take precedence)
+	t.is(normalizeUrl('https://example.com/path/to/page', {
+		removePath: true,
+		transformPath: pathComponents => pathComponents.slice(0, 2)
+	}), 'https://example.com');
+});
+
 test('path-like query strings without equals signs are preserved', t => {
 	// Issue #193 - Path-like query strings should not get '=' appended
 	t.is(normalizeUrl('https://example.com/index.php?/Some/Route/To/Path/12345'), 'https://example.com/index.php?/Some/Route/To/Path/12345');

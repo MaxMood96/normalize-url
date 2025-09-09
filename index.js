@@ -89,6 +89,8 @@ export default function normalizeUrl(urlString, options) {
 		removeDirectoryIndex: false,
 		removeExplicitPort: false,
 		sortQueryParameters: true,
+		removePath: false,
+		transformPath: false,
 		...options,
 	};
 
@@ -198,6 +200,18 @@ export default function normalizeUrl(urlString, options) {
 			pathComponents = pathComponents.slice(0, -1);
 			urlObject.pathname = pathComponents.slice(1).join('/') + '/';
 		}
+	}
+
+	// Remove path
+	if (options.removePath) {
+		urlObject.pathname = '/';
+	}
+
+	// Transform path components
+	if (options.transformPath && typeof options.transformPath === 'function') {
+		const pathComponents = urlObject.pathname.split('/').filter(Boolean);
+		const newComponents = options.transformPath(pathComponents);
+		urlObject.pathname = newComponents?.length > 0 ? `/${newComponents.join('/')}` : '/';
 	}
 
 	if (urlObject.hostname) {
