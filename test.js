@@ -425,3 +425,35 @@ test('encoded backslashes do not get decoded', t => {
 	// Non-encoded backslashes should remain as-is.
 	t.is(normalizeUrl('https://foo.com/something\\else/great'), 'https://foo.com/something/else/great');
 });
+
+test('path-like query strings without equals signs are preserved', t => {
+	// Issue #193 - Path-like query strings should not get '=' appended
+	t.is(normalizeUrl('https://example.com/index.php?/Some/Route/To/Path/12345'), 'https://example.com/index.php?/Some/Route/To/Path/12345');
+	t.is(normalizeUrl('https://example.com/script.php?/api/v1/users/123'), 'https://example.com/script.php?/api/v1/users/123');
+	t.is(normalizeUrl('https://example.com/app.php?/admin/dashboard'), 'https://example.com/app.php?/admin/dashboard');
+	// Note: trailing slash is removed by default removeTrailingSlash option
+	t.is(normalizeUrl('https://example.com/index.php?/path/'), 'https://example.com/index.php?/path');
+	// With removeTrailingSlash disabled, trailing slash is preserved
+	t.is(normalizeUrl('https://example.com/index.php?/path/', {removeTrailingSlash: false}), 'https://example.com/index.php?/path/');
+	
+	// Mixed parameters: path-like without '=' and regular with '='
+	t.is(normalizeUrl('https://example.com/index.php?b=2&/path/to/resource&a=1'), 'https://example.com/index.php?/path/to/resource&a=1&b=2');
+	t.is(normalizeUrl('https://example.com/index.php?/path&param=value'), 'https://example.com/index.php?/path&param=value');
+	
+	// Regular parameters with empty values should keep '='
+	t.is(normalizeUrl('https://example.com/index.php?key='), 'https://example.com/index.php?key=');
+	t.is(normalizeUrl('https://example.com/index.php?key=&another='), 'https://example.com/index.php?another=&key=');
+	
+	// Parameters without values should not get '=' added
+	t.is(normalizeUrl('https://example.com/index.php?key'), 'https://example.com/index.php?key');
+	t.is(normalizeUrl('https://example.com/index.php?a&b&c'), 'https://example.com/index.php?a&b&c');
+	
+	// With sortQueryParameters disabled, original format is preserved
+	t.is(normalizeUrl('https://example.com/index.php?/Some/Route/To/Path/12345', {sortQueryParameters: false}), 'https://example.com/index.php?/Some/Route/To/Path/12345');
+	t.is(normalizeUrl('https://example.com/index.php?key', {sortQueryParameters: false}), 'https://example.com/index.php?key');
+	
+	// Safety: parameters with similar names should not interfere with each other
+	t.is(normalizeUrl('https://example.com/index.php?/path&/longpath'), 'https://example.com/index.php?/longpath&/path');
+	t.is(normalizeUrl('https://example.com/index.php?key&anotherkey'), 'https://example.com/index.php?anotherkey&key');
+	t.is(normalizeUrl('https://example.com/index.php?/api&/api/v1/users'), 'https://example.com/index.php?/api&/api/v1/users');
+});

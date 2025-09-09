@@ -240,12 +240,21 @@ export default function normalizeUrl(urlString, options) {
 
 	// Sort query parameters
 	if (options.sortQueryParameters) {
+		const originalSearch = urlObject.search;
 		urlObject.searchParams.sort();
 
 		// Calling `.sort()` encodes the search parameters, so we need to decode them again.
 		try {
 			urlObject.search = decodeURIComponent(urlObject.search);
 		} catch {}
+
+		// Fix parameters that originally had no equals sign but got one added by URLSearchParams
+		const partsWithoutEquals = originalSearch.slice(1).split('&').filter(p => p && !p.includes('='));
+		for (const part of partsWithoutEquals) {
+			const decoded = decodeURIComponent(part);
+			// Only replace at word boundaries to avoid partial matches
+			urlObject.search = urlObject.search.replace(`?${decoded}=`, `?${decoded}`).replace(`&${decoded}=`, `&${decoded}`);
+		}
 	}
 
 	if (options.removeTrailingSlash) {
