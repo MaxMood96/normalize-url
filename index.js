@@ -193,12 +193,12 @@ export default function normalizeUrl(urlString, options) {
 	}
 
 	if (Array.isArray(options.removeDirectoryIndex) && options.removeDirectoryIndex.length > 0) {
-		let pathComponents = urlObject.pathname.split('/');
+		const pathComponents = urlObject.pathname.split('/').filter(Boolean);
 		const lastComponent = pathComponents[pathComponents.length - 1];
 
-		if (testParameter(lastComponent, options.removeDirectoryIndex)) {
-			pathComponents = pathComponents.slice(0, -1);
-			urlObject.pathname = pathComponents.slice(1).join('/') + '/';
+		if (lastComponent && testParameter(lastComponent, options.removeDirectoryIndex)) {
+			pathComponents.pop();
+			urlObject.pathname = pathComponents.length > 0 ? '/' + pathComponents.join('/') + '/' : '/';
 		}
 	}
 

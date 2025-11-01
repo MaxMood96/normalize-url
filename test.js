@@ -262,6 +262,13 @@ test('removeDirectoryIndex option', t => {
 	t.is(normalizeUrl('http://sindresorhus.com/index.html', options3), 'http://sindresorhus.com');
 	t.is(normalizeUrl('http://sindresorhus.com/index.htm', options3), 'http://sindresorhus.com');
 	t.is(normalizeUrl('http://sindresorhus.com/index.php', options3), 'http://sindresorhus.com');
+
+	// Should handle trailing slashes consistently
+	const options4 = {removeDirectoryIndex: ['fr']};
+	t.is(normalizeUrl('http://example.com/fr', options4), 'http://example.com');
+	t.is(normalizeUrl('http://example.com/fr/', options4), 'http://example.com');
+	t.is(normalizeUrl('http://example.com/path/fr', options4), 'http://example.com/path');
+	t.is(normalizeUrl('http://example.com/path/fr/', options4), 'http://example.com/path');
 });
 
 test('removeTrailingSlash and removeDirectoryIndex options)', t => {
