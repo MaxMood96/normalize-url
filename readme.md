@@ -187,6 +187,8 @@ Default: `[/^utm_\w+/i]`
 
 Remove query parameters that matches any of the provided strings or regexes.
 
+Global and sticky regex flags are stripped.
+
 ```js
 normalizeUrl('www.sindresorhus.com?foo=bar&ref=test_ref', {
 	removeQueryParameters: ['ref']
@@ -220,6 +222,8 @@ Default: `undefined`
 Keeps only query parameters that matches any of the provided strings or regexes.
 
 **Note:** It overrides the `removeQueryParameters` option.
+
+Global and sticky regex flags are stripped.
 
 ```js
 normalizeUrl('https://sindresorhus.com?foo=bar&ref=unicorn', {
@@ -268,7 +272,11 @@ normalizeUrl('https://sindresorhus.com/', {removeSingleSlash: false});
 Type: `boolean | Array<RegExp | string>`\
 Default: `false`
 
-Removes the default directory index file from path that matches any of the provided strings or regexes. When `true`, the regex `/^index\.[a-z]+$/` is used.
+Removes the default directory index file from path that matches any of the provided strings or regexes.
+
+When `true`, the regex `/^index\.[a-z]+$/` is used.
+
+Global and sticky regex flags are stripped.
 
 ```js
 normalizeUrl('www.sindresorhus.com/foo/default.php', {
@@ -305,6 +313,26 @@ normalizeUrl('www.sindresorhus.com?b=two&a=one&c=three', {
 	sortQueryParameters: false
 });
 //=> 'http://sindresorhus.com/?b=two&a=one&c=three'
+```
+
+##### emptyQueryValue
+
+Type: `string`\
+Default: `'preserve'`\
+Values: `'preserve' | 'always' | 'never'`
+
+Controls how query parameters with empty values are formatted.
+
+- `'preserve'` - Keep the original format (`?key` stays `?key`, `?key=` stays `?key=`). If the same key appears with both formats (`?a&a=`), all instances will use the format without `=`.
+- `'always'` - Always include `=` for empty values (`?key` becomes `?key=`)
+- `'never'` - Never include `=` for empty values (`?key=` becomes `?key`)
+
+```js
+normalizeUrl('www.sindresorhus.com?a&b=', {emptyQueryValue: 'always'});
+//=> 'http://sindresorhus.com/?a=&b='
+
+normalizeUrl('www.sindresorhus.com?a&b=', {emptyQueryValue: 'never'});
+//=> 'http://sindresorhus.com/?a&b'
 ```
 
 ##### removePath

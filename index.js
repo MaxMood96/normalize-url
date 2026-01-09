@@ -2,7 +2,17 @@
 const DATA_URL_DEFAULT_MIME_TYPE = 'text/plain';
 const DATA_URL_DEFAULT_CHARSET = 'us-ascii';
 
-const testParameter = (name, filters) => filters.some(filter => filter instanceof RegExp ? filter.test(name) : filter === name);
+const testParameter = (name, filters) => Array.isArray(filters) && filters.some(filter => {
+	if (filter instanceof RegExp) {
+		if (filter.flags.includes('g') || filter.flags.includes('y')) {
+			return new RegExp(filter.source, filter.flags.replace(/[gy]/g, '')).test(name);
+		}
+
+		return filter.test(name);
+	}
+
+	return filter === name;
+});
 
 const supportedProtocols = new Set([
 	'https:',
@@ -22,6 +32,76 @@ const hasCustomProtocol = urlString => {
 	}
 };
 
+const decodeQueryKey = value => {
+	try {
+		return decodeURIComponent(value.replace(/\+/g, '%20'));
+	} catch {
+		// Match URLSearchParams behavior for malformed percent-encoding.
+		return new URLSearchParams(`${value}=`).keys().next().value;
+	}
+};
+
+const getKeysWithoutEquals = search => {
+	const keys = new Set();
+	if (!search) {
+		return keys;
+	}
+
+	for (const part of search.slice(1).split('&')) {
+		if (part && !part.includes('=')) {
+			keys.add(decodeQueryKey(part));
+		}
+	}
+
+	return keys;
+};
+
+const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) => {
+	const isAlways = emptyQueryValue === 'always';
+	const isNever = emptyQueryValue === 'never';
+	const keysWithoutEquals = (isAlways || isNever) ? undefined : getKeysWithoutEquals(originalSearch);
+
+	const normalizeKey = key => key.replace(/\+/g, '%20');
+	const formatEmptyValue = normalizedKey => {
+		if (isAlways) {
+			return `${normalizedKey}=`;
+		}
+
+		if (isNever) {
+			return normalizedKey;
+		}
+
+		return keysWithoutEquals.has(decodeQueryKey(normalizedKey)) ? normalizedKey : `${normalizedKey}=`;
+	};
+
+	const normalizeParam = param => {
+		const equalIndex = param.indexOf('=');
+
+		if (equalIndex === -1) {
+			// Normalize + to %20 (+ means space in query strings)
+			return formatEmptyValue(normalizeKey(param));
+		}
+
+		const key = param.slice(0, equalIndex);
+		const value = param.slice(equalIndex + 1);
+
+		if (value === '') {
+			if (key === '') {
+				return '=';
+			}
+
+			// Normalize + to %20 (+ means space in query strings)
+			return formatEmptyValue(normalizeKey(key));
+		}
+
+		// Normalize + to %20 in key, decode %3D to = in values (= is safe unencoded in query values)
+		return `${normalizeKey(key)}=${value.replace(/%3D/gi, '=')}`;
+	};
+
+	const params = search.slice(1).split('&').filter(Boolean);
+	return params.length === 0 ? '' : `?${params.map(normalizeParam).join('&')}`;
+};
+
 const normalizeDataURL = (urlString, {stripHash}) => {
 	const match = /^data:(?<type>[^,]*?),(?<data>[^#]*?)(?:#(?<hash>.*))?$/.exec(urlString);
 
@@ -38,7 +118,7 @@ const normalizeDataURL = (urlString, {stripHash}) => {
 	}
 
 	// Lowercase MIME type
-	const mimeType = mediaType.shift()?.toLowerCase() ?? '';
+	const mimeType = mediaType.shift().toLowerCase();
 	const attributes = mediaType
 		.map(attribute => {
 			let [key, value = ''] = attribute.split('=').map(string => string.trim());
@@ -88,6 +168,7 @@ export default function normalizeUrl(urlString, options) {
 		sortQueryParameters: true,
 		removePath: false,
 		transformPath: false,
+		emptyQueryValue: 'preserve',
 		...options,
 	};
 
@@ -225,48 +306,48 @@ export default function normalizeUrl(urlString, options) {
 		}
 	}
 
+	// Capture original query params format before any searchParams modifications
+	const originalSearch = urlObject.search;
+	const hasKeepQueryParameters = Array.isArray(options.keepQueryParameters);
+	const searchParams = urlObject.searchParams;
+
 	// Remove query unwanted parameters
-	if (Array.isArray(options.removeQueryParameters)) {
+	if (!hasKeepQueryParameters && Array.isArray(options.removeQueryParameters) && options.removeQueryParameters.length > 0) {
 		// eslint-disable-next-line unicorn/no-useless-spread -- We are intentionally spreading to get a copy.
-		for (const key of [...urlObject.searchParams.keys()]) {
+		for (const key of [...searchParams.keys()]) {
 			if (testParameter(key, options.removeQueryParameters)) {
-				urlObject.searchParams.delete(key);
+				searchParams.delete(key);
 			}
 		}
 	}
 
-	if (!Array.isArray(options.keepQueryParameters) && options.removeQueryParameters === true) {
+	if (!hasKeepQueryParameters && options.removeQueryParameters === true) {
 		urlObject.search = '';
 	}
 
 	// Keep wanted query parameters
-	if (Array.isArray(options.keepQueryParameters) && options.keepQueryParameters.length > 0) {
+	if (hasKeepQueryParameters && options.keepQueryParameters.length > 0) {
 		// eslint-disable-next-line unicorn/no-useless-spread -- We are intentionally spreading to get a copy.
-		for (const key of [...urlObject.searchParams.keys()]) {
+		for (const key of [...searchParams.keys()]) {
 			if (!testParameter(key, options.keepQueryParameters)) {
-				urlObject.searchParams.delete(key);
+				searchParams.delete(key);
 			}
 		}
+	} else if (hasKeepQueryParameters) {
+		urlObject.search = '';
 	}
 
 	// Sort query parameters
 	if (options.sortQueryParameters) {
-		const originalSearch = urlObject.search;
 		urlObject.searchParams.sort();
 
 		// Calling `.sort()` encodes the search parameters, so we need to decode them again.
-		try {
-			urlObject.search = decodeURIComponent(urlObject.search);
-		} catch {}
-
-		// Fix parameters that originally had no equals sign but got one added by URLSearchParams
-		const partsWithoutEquals = originalSearch.slice(1).split('&').filter(p => p && !p.includes('='));
-		for (const part of partsWithoutEquals) {
-			const decoded = decodeURIComponent(part);
-			// Only replace at word boundaries to avoid partial matches
-			urlObject.search = urlObject.search.replace(`?${decoded}=`, `?${decoded}`).replace(`&${decoded}=`, `&${decoded}`);
-		}
+		// Protect &=%#? %25 and %2B from decoding (would break URL structure or change meaning) by double-encoding them first.
+		urlObject.search = decodeURIComponent(urlObject.search.replace(/%(?:26|3D|23|3F|25|2B)/gi, match => `%25${match.slice(1)}`));
 	}
+
+	// Normalize empty query parameter values
+	urlObject.search = normalizeEmptyQueryParameters(urlObject.search, options.emptyQueryValue, originalSearch);
 
 	if (options.removeTrailingSlash) {
 		urlObject.pathname = urlObject.pathname.replace(/\/$/, '');

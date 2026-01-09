@@ -134,6 +134,12 @@ test('removeQueryParameters option', t => {
 	t.is(normalizeUrl('http://www.sindresorhus.com', options), 'http://www.sindresorhus.com');
 	t.is(normalizeUrl('www.sindresorhus.com?foo=bar', options), 'http://www.sindresorhus.com/?foo=bar');
 	t.is(normalizeUrl('www.sindresorhus.com?foo=bar&utm_medium=test&ref=test_ref', options), 'http://www.sindresorhus.com/?foo=bar');
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {removeQueryParameters: [/^foo/gi]}), 'https://example.com/?bar=3');
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {removeQueryParameters: [/^foo/y]}), 'https://example.com/?bar=3');
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {removeQueryParameters: ['foo', /^foo2/y]}), 'https://example.com/?bar=3');
+	const globalFilter = /^foo/g;
+	globalFilter.lastIndex = 2;
+	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {removeQueryParameters: [globalFilter]}), 'https://example.com/?bar=2');
 });
 
 test('removeQueryParameters boolean `true` option', t => {
@@ -167,6 +173,38 @@ test('keepQueryParameters option', t => {
 	t.is(normalizeUrl('https://sindresorhus.com', options), 'https://sindresorhus.com');
 	t.is(normalizeUrl('www.sindresorhus.com?foo=bar', options), 'http://www.sindresorhus.com');
 	t.is(normalizeUrl('www.sindresorhus.com?foo=bar&utm_medium=test&ref=test_ref', options), 'http://www.sindresorhus.com/?ref=test_ref&utm_medium=test');
+
+	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
+		removeQueryParameters: ['foo'],
+		keepQueryParameters: ['foo', 'bar']
+	}), 'https://example.com/?bar=2&foo=1');
+
+	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
+		removeQueryParameters: true,
+		keepQueryParameters: ['foo']
+	}), 'https://example.com/?foo=1');
+
+	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
+		keepQueryParameters: []
+	}), 'https://example.com');
+
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
+		keepQueryParameters: [/^foo/gi]
+	}), 'https://example.com/?foo=1&foo2=2');
+
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
+		keepQueryParameters: [/^foo/y]
+	}), 'https://example.com/?foo=1&foo2=2');
+
+	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
+		keepQueryParameters: ['foo2', /^foo/y]
+	}), 'https://example.com/?foo=1&foo2=2');
+
+	const globalKeep = /^foo/g;
+	globalKeep.lastIndex = 10;
+	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
+		keepQueryParameters: [globalKeep]
+	}), 'https://example.com/?foo=1');
 });
 
 test('forceHttp option', t => {
@@ -256,6 +294,12 @@ test('removeDirectoryIndex option', t => {
 	t.is(normalizeUrl('http://sindresorhus.com/remove.html', options2), 'http://sindresorhus.com');
 	t.is(normalizeUrl('http://sindresorhus.com/default.htm', options2), 'http://sindresorhus.com/default.htm');
 	t.is(normalizeUrl('http://sindresorhus.com/index.php', options2), 'http://sindresorhus.com');
+
+	const globalIndex = /index\.html/g;
+	globalIndex.lastIndex = 5;
+	const options2b = {removeDirectoryIndex: [globalIndex, /index\.php/y]};
+	t.is(normalizeUrl('http://sindresorhus.com/index.html', options2b), 'http://sindresorhus.com');
+	t.is(normalizeUrl('http://sindresorhus.com/index.php', options2b), 'http://sindresorhus.com');
 
 	const options3 = {removeDirectoryIndex: true};
 	t.is(normalizeUrl('http://sindresorhus.com/index.html'), 'http://sindresorhus.com/index.html');
@@ -523,4 +567,128 @@ test('path-like query strings without equals signs are preserved', t => {
 	t.is(normalizeUrl('https://example.com/index.php?/path&/longpath'), 'https://example.com/index.php?/longpath&/path');
 	t.is(normalizeUrl('https://example.com/index.php?key&anotherkey'), 'https://example.com/index.php?anotherkey&key');
 	t.is(normalizeUrl('https://example.com/index.php?/api&/api/v1/users'), 'https://example.com/index.php?/api&/api/v1/users');
+});
+
+test('emptyQueryValue option', t => {
+	// Default 'preserve' behavior - keeps original format
+	t.is(normalizeUrl('https://example.com?key'), 'https://example.com/?key');
+	t.is(normalizeUrl('https://example.com?key='), 'https://example.com/?key=');
+	t.is(normalizeUrl('https://example.com?a&b=&c=1'), 'https://example.com/?a&b=&c=1');
+
+	// 'always' - always include equals sign
+	const always = {emptyQueryValue: 'always'};
+	t.is(normalizeUrl('https://example.com?key', always), 'https://example.com/?key=');
+	t.is(normalizeUrl('https://example.com?key=', always), 'https://example.com/?key=');
+	t.is(normalizeUrl('https://example.com?a&b=&c=1', always), 'https://example.com/?a=&b=&c=1');
+	t.is(normalizeUrl('https://example.com?foo&bar&baz=value', always), 'https://example.com/?bar=&baz=value&foo=');
+
+	// 'never' - never include equals sign for empty values
+	const never = {emptyQueryValue: 'never'};
+	t.is(normalizeUrl('https://example.com?key', never), 'https://example.com/?key');
+	t.is(normalizeUrl('https://example.com?key=', never), 'https://example.com/?key');
+	t.is(normalizeUrl('https://example.com?a&b=&c=1', never), 'https://example.com/?a&b&c=1');
+	t.is(normalizeUrl('https://example.com?foo=&bar=&baz=value', never), 'https://example.com/?bar&baz=value&foo');
+
+	// Works with sortQueryParameters disabled
+	t.is(normalizeUrl('https://example.com?b&a=', {emptyQueryValue: 'always', sortQueryParameters: false}), 'https://example.com/?b=&a=');
+	t.is(normalizeUrl('https://example.com?b=&a', {emptyQueryValue: 'never', sortQueryParameters: false}), 'https://example.com/?b&a');
+
+	// 'never' should not strip = when value itself ends with =
+	t.is(normalizeUrl('https://example.com?key==', {emptyQueryValue: 'never'}), 'https://example.com/?key==');
+	t.is(normalizeUrl('https://example.com?key=value=', {emptyQueryValue: 'never'}), 'https://example.com/?key=value=');
+
+	// 'preserve' should work correctly when removeQueryParameters modifies the URL
+	t.is(normalizeUrl('https://example.com?key&utm_source=test'), 'https://example.com/?key');
+	t.is(normalizeUrl('https://example.com?key&utm_source=test', {sortQueryParameters: false}), 'https://example.com/?key');
+
+	// 'preserve' should work correctly with URL-encoded keys containing spaces
+	t.is(normalizeUrl('https://example.com?foo%20bar'), 'https://example.com/?foo%20bar');
+	t.is(normalizeUrl('https://example.com?foo%20bar='), 'https://example.com/?foo%20bar=');
+	t.is(normalizeUrl('https://example.com?foo%20bar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%20bar');
+
+	// 'preserve' with duplicate keys having mixed formats normalizes all to the same format
+	t.is(normalizeUrl('https://example.com?a&a=', {sortQueryParameters: false}), 'https://example.com/?a&a');
+	t.is(normalizeUrl('https://example.com?a=&a', {sortQueryParameters: false}), 'https://example.com/?a&a');
+
+	// Keys with + (which means space in query strings)
+	t.is(normalizeUrl('https://example.com?foo+bar'), 'https://example.com/?foo%20bar');
+	t.is(normalizeUrl('https://example.com?foo+bar='), 'https://example.com/?foo%20bar=');
+	t.is(normalizeUrl('https://example.com?foo+bar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%20bar');
+	t.is(normalizeUrl('https://example.com?foo+bar=value'), 'https://example.com/?foo%20bar=value');
+	t.is(normalizeUrl('https://example.com?foo+bar=value', {sortQueryParameters: false}), 'https://example.com/?foo%20bar=value');
+
+	// Keys with encoded plus should stay literal
+	t.is(normalizeUrl('https://example.com?foo%2Bbar=1'), 'https://example.com/?foo%2Bbar=1');
+	t.is(normalizeUrl('https://example.com?foo%2Bbar='), 'https://example.com/?foo%2Bbar=');
+	t.is(normalizeUrl('https://example.com?foo%2Bbar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%2Bbar');
+
+	// Invalid percent-encoding in key should not throw
+	t.is(normalizeUrl('https://example.com?%E0%A4'), 'https://example.com/?%EF%BF%BD');
+	t.is(normalizeUrl('https://example.com?%E0%A4='), 'https://example.com/?%EF%BF%BD=');
+	t.is(normalizeUrl('https://example.com?%E0%A4&%E0%A4='), 'https://example.com/?%EF%BF%BD&%EF%BF%BD');
+	t.is(normalizeUrl('https://example.com?%E0%A4=&%EF%BF%BD='), 'https://example.com/?%EF%BF%BD=&%EF%BF%BD=');
+
+	// Keys with + when sortQueryParameters is disabled
+	t.is(normalizeUrl('https://example.com?foo+bar', {sortQueryParameters: false}), 'https://example.com/?foo%20bar');
+	t.is(normalizeUrl('https://example.com?foo+bar=', {sortQueryParameters: false}), 'https://example.com/?foo%20bar=');
+	t.is(normalizeUrl('https://example.com?foo+bar&baz+qux=', {sortQueryParameters: false}), 'https://example.com/?foo%20bar&baz%20qux=');
+
+	// Unicode keys
+	t.is(normalizeUrl('https://example.com?café'), 'https://example.com/?caf%C3%A9');
+	t.is(normalizeUrl('https://example.com?café='), 'https://example.com/?caf%C3%A9=');
+	t.is(normalizeUrl('https://example.com?café=', {emptyQueryValue: 'never'}), 'https://example.com/?caf%C3%A9');
+
+	// Encoded delimiters in keys
+	t.is(normalizeUrl('https://example.com?foo%26bar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%26bar');
+	t.is(normalizeUrl('https://example.com?foo%3Dbar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%3Dbar');
+	t.is(normalizeUrl('https://example.com?foo%26bar&utm_source=test'), 'https://example.com/?foo%26bar');
+	t.is(normalizeUrl('https://example.com?foo%2526bar='), 'https://example.com/?foo%2526bar=');
+	t.is(normalizeUrl('https://example.com?foo%2526bar=', {emptyQueryValue: 'never'}), 'https://example.com/?foo%2526bar');
+
+	// Multiple keys with mixed formats
+	t.is(normalizeUrl('https://example.com?a&b=&c=1'), 'https://example.com/?a&b=&c=1');
+	t.is(normalizeUrl('https://example.com?foo%20bar&baz'), 'https://example.com/?baz&foo%20bar');
+
+	// Duplicate keys with sorting enabled (default) - mixed formats normalize to same format
+	t.is(normalizeUrl('https://example.com?a&a='), 'https://example.com/?a&a');
+	t.is(normalizeUrl('https://example.com?a=&a'), 'https://example.com/?a&a');
+	t.is(normalizeUrl('https://example.com?a&a&a='), 'https://example.com/?a&a&a');
+	t.is(normalizeUrl('https://example.com?a=&a=&a'), 'https://example.com/?a&a&a');
+
+	// Multiple = in values (only first = is the delimiter)
+	t.is(normalizeUrl('https://example.com?key=a=b=c'), 'https://example.com/?key=a=b=c');
+	t.is(normalizeUrl('https://example.com?data=abc=='), 'https://example.com/?data=abc==');
+
+	// Encoded = (%3D) in values gets decoded (= is safe unencoded in values)
+	t.is(normalizeUrl('https://example.com?key=val%3Due'), 'https://example.com/?key=val=ue');
+	t.is(normalizeUrl('https://example.com?key=%3D'), 'https://example.com/?key==');
+	t.is(normalizeUrl('https://example.com?key=val%3Due', {sortQueryParameters: false}), 'https://example.com/?key=val=ue');
+
+	// All params removed leaves no query string
+	t.is(normalizeUrl('https://example.com?utm_source=test&utm_medium=web'), 'https://example.com');
+	t.is(normalizeUrl('https://example.com?key', {removeQueryParameters: true}), 'https://example.com');
+
+	// Single param edge cases
+	t.is(normalizeUrl('https://example.com?=value'), 'https://example.com/?=value');
+	t.is(normalizeUrl('https://example.com?='), 'https://example.com/?=');
+	t.is(normalizeUrl('https://example.com?=value', {emptyQueryValue: 'always'}), 'https://example.com/?=value');
+	t.is(normalizeUrl('https://example.com?=value', {emptyQueryValue: 'never'}), 'https://example.com/?=value');
+	t.is(normalizeUrl('https://example.com?=', {emptyQueryValue: 'always'}), 'https://example.com/?=');
+	t.is(normalizeUrl('https://example.com?=', {emptyQueryValue: 'never'}), 'https://example.com/?=');
+	t.is(normalizeUrl('https://example.com?=&a=', {emptyQueryValue: 'never'}), 'https://example.com/?=&a');
+	t.is(normalizeUrl('https://example.com?=&=', {emptyQueryValue: 'always'}), 'https://example.com/?=&=');
+	t.is(normalizeUrl('https://example.com?=&=', {emptyQueryValue: 'never'}), 'https://example.com/?=&=');
+	t.is(normalizeUrl('https://example.com?=&a', {emptyQueryValue: 'always'}), 'https://example.com/?=&a=');
+	t.is(normalizeUrl('https://example.com?&', {emptyQueryValue: 'always'}), 'https://example.com');
+	t.is(normalizeUrl('https://example.com?&', {emptyQueryValue: 'never'}), 'https://example.com');
+
+	// Empty segments are removed even when sorting is disabled
+	t.is(normalizeUrl('https://example.com?foo&&bar', {sortQueryParameters: false}), 'https://example.com/?foo&bar');
+	t.is(normalizeUrl('https://example.com?foo&&bar', {sortQueryParameters: false, emptyQueryValue: 'always'}), 'https://example.com/?foo=&bar=');
+	t.is(normalizeUrl('https://example.com?foo&&bar', {sortQueryParameters: false, emptyQueryValue: 'never'}), 'https://example.com/?foo&bar');
+	t.is(normalizeUrl('https://example.com?&&', {sortQueryParameters: false}), 'https://example.com');
+
+	// Hash does not affect query normalization
+	t.is(normalizeUrl('https://example.com?key#hash'), 'https://example.com/?key#hash');
+	t.is(normalizeUrl('https://example.com?key=#hash'), 'https://example.com/?key=#hash');
 });

@@ -147,6 +147,8 @@ export type Options = {
 	/**
 	Removes query parameters that matches any of the provided strings or regexes.
 
+	Global and sticky regex flags are stripped.
+
 	@default [/^utm_\w+/i]
 
 	@example
@@ -181,6 +183,8 @@ export type Options = {
 	Keeps only query parameters that matches any of the provided strings or regexes.
 
 	__Note__: It overrides the `removeQueryParameters` option.
+
+	Global and sticky regex flags are stripped.
 
 	@default undefined
 
@@ -233,7 +237,10 @@ export type Options = {
 
 	/**
 	Removes the default directory index file from path that matches any of the provided strings or regexes.
+
 	When `true`, the regex `/^index\.[a-z]+$/` is used.
+
+	Global and sticky regex flags are stripped.
 
 	@default false
 
@@ -278,6 +285,26 @@ export type Options = {
 	```
 	*/
 	readonly sortQueryParameters?: boolean;
+
+	/**
+	Controls how query parameters with empty values are formatted.
+
+	- `'preserve'` - Keep the original format (`?key` stays `?key`, `?key=` stays `?key=`). If the same key appears with both formats (`?a&a=`), all instances will use the format without `=`.
+	- `'always'` - Always include `=` for empty values (`?key` becomes `?key=`)
+	- `'never'` - Never include `=` for empty values (`?key=` becomes `?key`)
+
+	@default 'preserve'
+
+	@example
+	```
+	normalizeUrl('www.sindresorhus.com?a&b=', {emptyQueryValue: 'always'});
+	//=> 'http://sindresorhus.com/?a=&b='
+
+	normalizeUrl('www.sindresorhus.com?a&b=', {emptyQueryValue: 'never'});
+	//=> 'http://sindresorhus.com/?a&b'
+	```
+	*/
+	readonly emptyQueryValue?: 'preserve' | 'always' | 'never';
 
 	/**
 	Removes the entire URL path, leaving only the domain.
