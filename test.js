@@ -170,34 +170,34 @@ test('keepQueryParameters option', t => {
 
 	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
 		removeQueryParameters: ['foo'],
-		keepQueryParameters: ['foo', 'bar']
+		keepQueryParameters: ['foo', 'bar'],
 	}), 'https://example.com/?bar=2&foo=1');
 
 	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
 		removeQueryParameters: true,
-		keepQueryParameters: ['foo']
+		keepQueryParameters: ['foo'],
 	}), 'https://example.com/?foo=1');
 
 	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
-		keepQueryParameters: []
+		keepQueryParameters: [],
 	}), 'https://example.com');
 
 	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
-		keepQueryParameters: [/^foo/gi]
+		keepQueryParameters: [/^foo/gi],
 	}), 'https://example.com/?foo=1&foo2=2');
 
 	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
-		keepQueryParameters: [/^foo/y]
+		keepQueryParameters: [/^foo/y],
 	}), 'https://example.com/?foo=1&foo2=2');
 
 	t.is(normalizeUrl('https://example.com?foo=1&foo2=2&bar=3', {
-		keepQueryParameters: ['foo2', /^foo/y]
+		keepQueryParameters: ['foo2', /^foo/y],
 	}), 'https://example.com/?foo=1&foo2=2');
 
 	const globalKeep = /^foo/g;
 	globalKeep.lastIndex = 10;
 	t.is(normalizeUrl('https://example.com?foo=1&bar=2', {
-		keepQueryParameters: [globalKeep]
+		keepQueryParameters: [globalKeep],
 	}), 'https://example.com/?foo=1');
 });
 
@@ -527,11 +527,11 @@ test('customProtocols option', t => {
 	t.is(normalizeUrl('foo.bar://www.example.com', {customProtocols: ['foo.bar']}), 'foo.bar://example.com');
 	t.is(normalizeUrl('FOO.BAR://www.example.com', {customProtocols: ['foo.bar']}), 'foo.bar://example.com');
 
-	// forceHttp/forceHttps don't affect custom protocols
+	// ForceHttp/forceHttps don't affect custom protocols
 	t.is(normalizeUrl('sindre://sorhus.com', {...options, forceHttp: true}), 'sindre://sorhus.com');
 	t.is(normalizeUrl('sindre://sorhus.com', {...options, forceHttps: true}), 'sindre://sorhus.com');
 
-	// stripProtocol doesn't affect custom protocols
+	// StripProtocol doesn't affect custom protocols
 	t.is(normalizeUrl('sindre://sorhus.com', {...options, stripProtocol: true}), 'sindre://sorhus.com');
 
 	// Port handling
@@ -557,16 +557,16 @@ test('customProtocols option', t => {
 	// Auth stripping with stripAuthentication: false
 	t.is(normalizeUrl('sindre://user:password@www.sorhus.com', {...options, stripAuthentication: false}), 'sindre://user:password@sorhus.com');
 
-	// stripWWW: false
+	// StripWWW: false
 	t.is(normalizeUrl('sindre://www.sorhus.com', {...options, stripWWW: false}), 'sindre://www.sorhus.com');
 
-	// removeTrailingSlash: false
+	// RemoveTrailingSlash: false
 	t.is(normalizeUrl('sindre://sorhus.com/foo/', {...options, removeTrailingSlash: false}), 'sindre://sorhus.com/foo/');
 
-	// removeQueryParameters: true removes all query params
+	// RemoveQueryParameters: true removes all query params
 	t.is(normalizeUrl('sindre://sorhus.com?foo=bar', {...options, removeQueryParameters: true}), 'sindre://sorhus.com');
 
-	// keepQueryParameters
+	// KeepQueryParameters
 	t.is(normalizeUrl('sindre://sorhus.com?foo=bar&baz=qux', {...options, keepQueryParameters: ['foo']}), 'sindre://sorhus.com?foo=bar');
 
 	// Built-in protocols still work normally
@@ -579,7 +579,7 @@ test('encoded backslashes do not get decoded', t => {
 	t.is(normalizeUrl('https://foo.com/something%5Celse/great'), 'https://foo.com/something%5Celse/great');
 
 	// Non-encoded backslashes should remain as-is.
-	t.is(normalizeUrl('https://foo.com/something\\else/great'), 'https://foo.com/something/else/great');
+	t.is(normalizeUrl(String.raw`https://foo.com/something\else/great`), 'https://foo.com/something/else/great');
 });
 
 test('removePath option', t => {
@@ -612,8 +612,10 @@ test('transformPath option', t => {
 		if (pathComponents[0] === 'api') {
 			return pathComponents.slice(0, 1); // Keep /api only
 		}
+
 		return []; // Remove everything else
 	};
+
 	t.is(normalizeUrl('https://example.com/api/v1/users', {transformPath: customLogic}), 'https://example.com/api');
 	t.is(normalizeUrl('https://example.com/other/path', {transformPath: customLogic}), 'https://example.com');
 
@@ -625,7 +627,7 @@ test('transformPath option', t => {
 	// Combining with removePath (removePath should take precedence)
 	t.is(normalizeUrl('https://example.com/path/to/page', {
 		removePath: true,
-		transformPath: pathComponents => pathComponents.slice(0, 2)
+		transformPath: pathComponents => pathComponents.slice(0, 2),
 	}), 'https://example.com');
 });
 
@@ -665,7 +667,7 @@ test('sortQueryParameters should preserve encoded reserved characters in query v
 	// Issue #189 - `%2F` in query values must remain encoded
 	t.is(
 		normalizeUrl('https://example.com/?X-Amz-Credential=AKIA%2F20200101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host'),
-		'https://example.com/?X-Amz-Credential=AKIA%2F20200101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host'
+		'https://example.com/?X-Amz-Credential=AKIA%2F20200101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host',
 	);
 	t.is(normalizeUrl('https://example.com/?token=a%2Fb%2Fc'), 'https://example.com/?token=a%2Fb%2Fc');
 	t.is(normalizeUrl('https://example.com/?token=a%2fb%2fc'), 'https://example.com/?token=a%2Fb%2Fc');
@@ -701,11 +703,11 @@ test('sortQueryParameters should preserve encoded reserved characters in query v
 	t.is(normalizeUrl('https://example.com/?token=a/b&utm_source=test'), 'https://example.com/?token=a/b');
 	t.is(
 		normalizeUrl('https://example.com/?foo%3Abar=1&baz=2', {removeQueryParameters: ['foo:bar']}),
-		'https://example.com/?baz=2'
+		'https://example.com/?baz=2',
 	);
 	t.is(
 		normalizeUrl('https://example.com/?foo%3Abar=1&baz=2', {removeQueryParameters: false, keepQueryParameters: ['foo:bar']}),
-		'https://example.com/?foo%3Abar=1'
+		'https://example.com/?foo%3Abar=1',
 	);
 
 	// Preserved when sortQueryParameters is disabled
@@ -715,17 +717,17 @@ test('sortQueryParameters should preserve encoded reserved characters in query v
 	// Malformed percent-encoding should not allow token-collision rewrites in user data
 	t.is(
 		normalizeUrl('https://example.com/?broken=%E0%A4&literal=%5F%5Fnormalize_url_encoded_reserved__2F&token=a%2Fb'),
-		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__2F&token=a%2Fb'
+		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__2F&token=a%2Fb',
 	);
 	t.is(
 		normalizeUrl('https://example.com/?broken=%E0%A4&literal=%5F%5Fnormalize_url_encoded_reserved__0__2F&token=a%2Fb'),
-		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__0__2F&token=a%2Fb'
+		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__0__2F&token=a%2Fb',
 	);
 
 	const longPadding = '_'.repeat(4000);
 	t.is(
 		normalizeUrl(`https://example.com/?token=a%2Fb&literal=${longPadding}__normalize_url_encoded_reserved__${longPadding}`),
-		`https://example.com/?literal=${longPadding}__normalize_url_encoded_reserved__${longPadding}&token=a%2Fb`
+		`https://example.com/?literal=${longPadding}__normalize_url_encoded_reserved__${longPadding}&token=a%2Fb`,
 	);
 });
 

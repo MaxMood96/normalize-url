@@ -1,6 +1,7 @@
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
 const DATA_URL_DEFAULT_MIME_TYPE = 'text/plain';
 const DATA_URL_DEFAULT_CHARSET = 'us-ascii';
+
 const encodedReservedCharactersPattern = '%(?:3A|2F|3F|23|5B|5D|40|21|24|26|27|28|29|2A|2B|2C|3B|3D)';
 const temporaryEncodedReservedTokenBase = '__normalize_url_encoded_reserved__';
 const temporaryEncodedReservedTokenPattern = /__normalize_url_encoded_reserved__(\d+)__/g;
@@ -10,7 +11,7 @@ const encodedReservedCharactersRegex = new RegExp(encodedReservedCharactersPatte
 const testParameter = (name, filters) => Array.isArray(filters) && filters.some(filter => {
 	if (filter instanceof RegExp) {
 		if (filter.flags.includes('g') || filter.flags.includes('y')) {
-			return new RegExp(filter.source, filter.flags.replace(/[gy]/g, '')).test(name);
+			return new RegExp(filter.source, filter.flags.replaceAll(/[gy]/g, '')).test(name);
 		}
 
 		return filter.test(name);
@@ -51,7 +52,7 @@ const getCustomProtocol = urlString => {
 
 const decodeQueryKey = value => {
 	try {
-		return decodeURIComponent(value.replace(/\+/g, '%20'));
+		return decodeURIComponent(value.replaceAll('+', '%20'));
 	} catch {
 		// Match URLSearchParams behavior for malformed percent-encoding.
 		return new URLSearchParams(`${value}=`).keys().next().value;
@@ -116,7 +117,7 @@ const sortSearchParameters = (searchParameters, encodedReservedTokenRegex) => {
 	entries.sort(([leftKey], [rightKey]) => {
 		const left = getSortableKey(leftKey);
 		const right = getSortableKey(rightKey);
-		return left < right ? -1 : left > right ? 1 : 0;
+		return left < right ? -1 : (left > right ? 1 : 0);
 	});
 
 	return new URLSearchParams(entries).toString();
@@ -135,7 +136,7 @@ const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) 
 	const isNever = emptyQueryValue === 'never';
 	const keysWithoutEquals = (isAlways || isNever) ? undefined : getKeysWithoutEquals(originalSearch);
 
-	const normalizeKey = key => key.replace(/\+/g, '%20');
+	const normalizeKey = key => key.replaceAll('+', '%20');
 	const formatEmptyValue = normalizedKey => {
 		if (isAlways) {
 			return `${normalizedKey}=`;
@@ -148,16 +149,16 @@ const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) 
 		return keysWithoutEquals.has(decodeQueryKey(normalizedKey)) ? normalizedKey : `${normalizedKey}=`;
 	};
 
-	const normalizeParam = param => {
-		const equalIndex = param.indexOf('=');
+	const normalizeParameter = parameter => {
+		const equalIndex = parameter.indexOf('=');
 
 		if (equalIndex === -1) {
 			// Normalize + to %20 (+ means space in query strings)
-			return formatEmptyValue(normalizeKey(param));
+			return formatEmptyValue(normalizeKey(parameter));
 		}
 
-		const key = param.slice(0, equalIndex);
-		const value = param.slice(equalIndex + 1);
+		const key = parameter.slice(0, equalIndex);
+		const value = parameter.slice(equalIndex + 1);
 
 		if (value === '') {
 			if (key === '') {
@@ -172,8 +173,8 @@ const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) 
 		return `${normalizeKey(key)}=${value}`;
 	};
 
-	const params = search.slice(1).split('&').filter(Boolean);
-	return params.length === 0 ? '' : `?${params.map(normalizeParam).join('&')}`;
+	const parameters = search.slice(1).split('&').filter(Boolean);
+	return parameters.length === 0 ? '' : `?${parameters.map(x => normalizeParameter(x)).join('&')}`;
 };
 
 const normalizeDataURL = (urlString, {stripHash}) => {
@@ -259,11 +260,9 @@ export default function normalizeUrl(urlString, options) {
 	}
 
 	const customProtocols = Array.isArray(options.customProtocols) ? options.customProtocols : [];
-	const normalizedCustomProtocols = new Set(
-		customProtocols
-			.map(protocol => normalizeCustomProtocolOption(protocol))
-			.filter(Boolean),
-	);
+	const normalizedCustomProtocols = new Set(customProtocols
+		.map(protocol => normalizeCustomProtocolOption(protocol))
+		.filter(Boolean));
 
 	const customProtocol = getCustomProtocol(urlString);
 	if (customProtocol && !normalizedCustomProtocols.has(customProtocol)) {
@@ -329,13 +328,13 @@ export default function normalizeUrl(urlString, options) {
 			const protocolAtIndex = match.index;
 			const intermediate = urlObject.pathname.slice(lastIndex, protocolAtIndex);
 
-			result += intermediate.replace(/\/{2,}/g, '/');
+			result += intermediate.replaceAll(/\/{2,}/g, '/');
 			result += protocol;
 			lastIndex = protocolAtIndex + protocol.length;
 		}
 
-		const remnant = urlObject.pathname.slice(lastIndex, urlObject.pathname.length);
-		result += remnant.replace(/\/{2,}/g, '/');
+		const remnant = urlObject.pathname.slice(lastIndex);
+		result += remnant.replaceAll(/\/{2,}/g, '/');
 
 		urlObject.pathname = result;
 	}
@@ -343,7 +342,7 @@ export default function normalizeUrl(urlString, options) {
 	// Decode URI octets
 	if (urlObject.pathname) {
 		try {
-			urlObject.pathname = decodeURI(urlObject.pathname).replace(/\\/g, '%5C');
+			urlObject.pathname = decodeURI(urlObject.pathname).replaceAll('\\', '%5C');
 		} catch {}
 	}
 
@@ -394,12 +393,12 @@ export default function normalizeUrl(urlString, options) {
 
 	if (options.sortQueryParameters && hasEncodedReservedCharactersRegex.test(originalSearch)) {
 		const encodedReservedTokenPrefix = getTemporaryEncodedReservedTokenPrefix(originalSearch);
-		urlObject.search = originalSearch.replace(encodedReservedCharactersRegex, match => `${encodedReservedTokenPrefix}${match.slice(1).toUpperCase()}`);
+		urlObject.search = originalSearch.replaceAll(encodedReservedCharactersRegex, match => `${encodedReservedTokenPrefix}${match.slice(1).toUpperCase()}`);
 		encodedReservedTokenRegex = new RegExp(`${encodedReservedTokenPrefix}([0-9A-F]{2})`, 'g');
 	}
 
 	const hasKeepQueryParameters = Array.isArray(options.keepQueryParameters);
-	const searchParams = urlObject.searchParams;
+	const {searchParams} = urlObject;
 
 	// Remove query unwanted parameters
 	if (!hasKeepQueryParameters && Array.isArray(options.removeQueryParameters) && options.removeQueryParameters.length > 0) {
@@ -433,7 +432,7 @@ export default function normalizeUrl(urlString, options) {
 
 		// Sorting and serializing encode the search parameters, so we need to decode them again.
 		// Protect &%#? and %2B from decoding (would break URL structure or change meaning) by double-encoding them first.
-		urlObject.search = decodeURIComponent(urlObject.search.replace(/%(?:26|23|3F|25|2B)/gi, match => `%25${match.slice(1)}`));
+		urlObject.search = decodeURIComponent(urlObject.search.replaceAll(/%(?:26|23|3f|25|2b)/gi, match => `%25${match.slice(1)}`));
 
 		if (encodedReservedTokenRegex) {
 			urlObject.search = urlObject.search.replace(encodedReservedTokenRegex, '%$1');
