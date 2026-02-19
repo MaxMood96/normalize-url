@@ -1,6 +1,11 @@
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
 const DATA_URL_DEFAULT_MIME_TYPE = 'text/plain';
 const DATA_URL_DEFAULT_CHARSET = 'us-ascii';
+const encodedReservedCharactersPattern = '%(?:3A|2F|3F|23|5B|5D|40|21|24|26|27|28|29|2A|2B|2C|3B|3D)';
+const temporaryEncodedReservedTokenBase = '__normalize_url_encoded_reserved__';
+const temporaryEncodedReservedTokenPattern = /__normalize_url_encoded_reserved__(\d+)__/g;
+const hasEncodedReservedCharactersRegex = new RegExp(encodedReservedCharactersPattern, 'i');
+const encodedReservedCharactersRegex = new RegExp(encodedReservedCharactersPattern, 'gi');
 
 const testParameter = (name, filters) => Array.isArray(filters) && filters.some(filter => {
 	if (filter instanceof RegExp) {
@@ -56,6 +61,63 @@ const getKeysWithoutEquals = search => {
 	return keys;
 };
 
+const getTemporaryEncodedReservedTokenPrefix = search => {
+	let decodedSearch = search;
+
+	try {
+		decodedSearch = decodeURIComponent(search);
+	} catch {
+		decodedSearch = new URLSearchParams(search).toString();
+	}
+
+	const getUsedTokenIndexes = value => {
+		const indexes = new Set();
+
+		for (const match of value.matchAll(temporaryEncodedReservedTokenPattern)) {
+			indexes.add(Number.parseInt(match[1], 10));
+		}
+
+		return indexes;
+	};
+
+	const usedTokenIndexes = getUsedTokenIndexes(search);
+	for (const tokenIndex of getUsedTokenIndexes(decodedSearch)) {
+		usedTokenIndexes.add(tokenIndex);
+	}
+
+	let tokenIndex = 0;
+	while (usedTokenIndexes.has(tokenIndex)) {
+		tokenIndex++;
+	}
+
+	return `${temporaryEncodedReservedTokenBase}${tokenIndex}__`;
+};
+
+const sortSearchParameters = (searchParameters, encodedReservedTokenRegex) => {
+	if (!encodedReservedTokenRegex) {
+		searchParameters.sort();
+		return searchParameters.toString();
+	}
+
+	const getSortableKey = key => key.replace(encodedReservedTokenRegex, (_, hexCode) => String.fromCodePoint(Number.parseInt(hexCode, 16)));
+	const entries = [...searchParameters.entries()];
+	entries.sort(([leftKey], [rightKey]) => {
+		const left = getSortableKey(leftKey);
+		const right = getSortableKey(rightKey);
+		return left < right ? -1 : left > right ? 1 : 0;
+	});
+
+	return new URLSearchParams(entries).toString();
+};
+
+const decodeReservedTokens = (value, encodedReservedTokenRegex) => {
+	if (!encodedReservedTokenRegex) {
+		return value;
+	}
+
+	return value.replace(encodedReservedTokenRegex, (_, hexCode) => String.fromCodePoint(Number.parseInt(hexCode, 16)));
+};
+
 const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) => {
 	const isAlways = emptyQueryValue === 'always';
 	const isNever = emptyQueryValue === 'never';
@@ -94,8 +156,8 @@ const normalizeEmptyQueryParameters = (search, emptyQueryValue, originalSearch) 
 			return formatEmptyValue(normalizeKey(key));
 		}
 
-		// Normalize + to %20 in key, decode %3D to = in values (= is safe unencoded in query values)
-		return `${normalizeKey(key)}=${value.replace(/%3D/gi, '=')}`;
+		// Normalize + to %20 in key.
+		return `${normalizeKey(key)}=${value}`;
 	};
 
 	const params = search.slice(1).split('&').filter(Boolean);
@@ -308,6 +370,14 @@ export default function normalizeUrl(urlString, options) {
 
 	// Capture original query params format before any searchParams modifications
 	const originalSearch = urlObject.search;
+	let encodedReservedTokenRegex;
+
+	if (options.sortQueryParameters && hasEncodedReservedCharactersRegex.test(originalSearch)) {
+		const encodedReservedTokenPrefix = getTemporaryEncodedReservedTokenPrefix(originalSearch);
+		urlObject.search = originalSearch.replace(encodedReservedCharactersRegex, match => `${encodedReservedTokenPrefix}${match.slice(1).toUpperCase()}`);
+		encodedReservedTokenRegex = new RegExp(`${encodedReservedTokenPrefix}([0-9A-F]{2})`, 'g');
+	}
+
 	const hasKeepQueryParameters = Array.isArray(options.keepQueryParameters);
 	const searchParams = urlObject.searchParams;
 
@@ -315,7 +385,7 @@ export default function normalizeUrl(urlString, options) {
 	if (!hasKeepQueryParameters && Array.isArray(options.removeQueryParameters) && options.removeQueryParameters.length > 0) {
 		// eslint-disable-next-line unicorn/no-useless-spread -- We are intentionally spreading to get a copy.
 		for (const key of [...searchParams.keys()]) {
-			if (testParameter(key, options.removeQueryParameters)) {
+			if (testParameter(decodeReservedTokens(key, encodedReservedTokenRegex), options.removeQueryParameters)) {
 				searchParams.delete(key);
 			}
 		}
@@ -329,7 +399,7 @@ export default function normalizeUrl(urlString, options) {
 	if (hasKeepQueryParameters && options.keepQueryParameters.length > 0) {
 		// eslint-disable-next-line unicorn/no-useless-spread -- We are intentionally spreading to get a copy.
 		for (const key of [...searchParams.keys()]) {
-			if (!testParameter(key, options.keepQueryParameters)) {
+			if (!testParameter(decodeReservedTokens(key, encodedReservedTokenRegex), options.keepQueryParameters)) {
 				searchParams.delete(key);
 			}
 		}
@@ -339,11 +409,15 @@ export default function normalizeUrl(urlString, options) {
 
 	// Sort query parameters
 	if (options.sortQueryParameters) {
-		urlObject.searchParams.sort();
+		urlObject.search = sortSearchParameters(urlObject.searchParams, encodedReservedTokenRegex);
 
-		// Calling `.sort()` encodes the search parameters, so we need to decode them again.
-		// Protect &=%#? %25 and %2B from decoding (would break URL structure or change meaning) by double-encoding them first.
-		urlObject.search = decodeURIComponent(urlObject.search.replace(/%(?:26|3D|23|3F|25|2B)/gi, match => `%25${match.slice(1)}`));
+		// Sorting and serializing encode the search parameters, so we need to decode them again.
+		// Protect &%#? and %2B from decoding (would break URL structure or change meaning) by double-encoding them first.
+		urlObject.search = decodeURIComponent(urlObject.search.replace(/%(?:26|23|3F|25|2B)/gi, match => `%25${match.slice(1)}`));
+
+		if (encodedReservedTokenRegex) {
+			urlObject.search = urlObject.search.replace(encodedReservedTokenRegex, '%$1');
+		}
 	}
 
 	// Normalize empty query parameter values

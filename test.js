@@ -569,6 +569,74 @@ test('path-like query strings without equals signs are preserved', t => {
 	t.is(normalizeUrl('https://example.com/index.php?/api&/api/v1/users'), 'https://example.com/index.php?/api&/api/v1/users');
 });
 
+test('sortQueryParameters should preserve encoded reserved characters in query values', t => {
+	// Issue #189 - `%2F` in query values must remain encoded
+	t.is(
+		normalizeUrl('https://example.com/?X-Amz-Credential=AKIA%2F20200101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host'),
+		'https://example.com/?X-Amz-Credential=AKIA%2F20200101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host'
+	);
+	t.is(normalizeUrl('https://example.com/?token=a%2Fb%2Fc'), 'https://example.com/?token=a%2Fb%2Fc');
+	t.is(normalizeUrl('https://example.com/?token=a%2fb%2fc'), 'https://example.com/?token=a%2Fb%2Fc');
+
+	const encodedReservedCharacters = ['%3A', '%2F', '%3F', '%23', '%5B', '%5D', '%40', '%21', '%24', '%26', '%27', '%28', '%29', '%2A', '%2B', '%2C', '%3B', '%3D'];
+	for (const encodedReservedCharacter of encodedReservedCharacters) {
+		t.is(normalizeUrl(`https://example.com/?value=${encodedReservedCharacter}`), `https://example.com/?value=${encodedReservedCharacter}`);
+	}
+
+	t.is(normalizeUrl('https://example.com/?value=:@[];,'), 'https://example.com/?value=:@[];,');
+
+	// Encoded reserved characters survive sort reordering
+	t.is(normalizeUrl('https://example.com/?z=1&token=a%2Fb'), 'https://example.com/?token=a%2Fb&z=1');
+
+	// Encoded reserved characters in keys with sort reordering
+	t.is(normalizeUrl('https://example.com/?A=1&%3A=2'), 'https://example.com/?%3A=2&A=1');
+	t.is(normalizeUrl('https://example.com/?foo%3Abar=1&a=2'), 'https://example.com/?a=2&foo%3Abar=1');
+	t.is(normalizeUrl('https://example.com/?foo%3Dbar=1&a=2'), 'https://example.com/?a=2&foo%3Dbar=1');
+	t.is(normalizeUrl('https://example.com/?b%26c=1&a=2'), 'https://example.com/?a=2&b%26c=1');
+
+	// Both keys with encoded reserved characters sort by decoded code point
+	t.is(normalizeUrl('https://example.com/?%3A=1&%2F=2'), 'https://example.com/?%2F=2&%3A=1'); // / (47) < : (58)
+	t.is(normalizeUrl('https://example.com/?%5B=1&%3A=2'), 'https://example.com/?%3A=2&%5B=1'); // : (58) < [ (91)
+
+	// Encoded reserved characters in both keys and values with sort reordering
+	t.is(normalizeUrl('https://example.com/?z%3A=val%2F&a%2F=val%3A'), 'https://example.com/?a%2F=val%3A&z%3A=val%2F');
+
+	// Multiple different encoded reserved characters in a single value
+	t.is(normalizeUrl('https://example.com/?q=%3A%2F%3F'), 'https://example.com/?q=%3A%2F%3F');
+
+	// Interaction with removeQueryParameters
+	t.is(normalizeUrl('https://example.com/?utm_source=test&token=a%2Fb'), 'https://example.com/?token=a%2Fb');
+	t.is(normalizeUrl('https://example.com/?token=a/b&utm_source=test'), 'https://example.com/?token=a/b');
+	t.is(
+		normalizeUrl('https://example.com/?foo%3Abar=1&baz=2', {removeQueryParameters: ['foo:bar']}),
+		'https://example.com/?baz=2'
+	);
+	t.is(
+		normalizeUrl('https://example.com/?foo%3Abar=1&baz=2', {removeQueryParameters: false, keepQueryParameters: ['foo:bar']}),
+		'https://example.com/?foo%3Abar=1'
+	);
+
+	// Preserved when sortQueryParameters is disabled
+	t.is(normalizeUrl('https://example.com/?token=a%2Fb', {sortQueryParameters: false}), 'https://example.com/?token=a%2Fb');
+	t.is(normalizeUrl('https://example.com/?token=%3A%2F%3F', {sortQueryParameters: false}), 'https://example.com/?token=%3A%2F%3F');
+
+	// Malformed percent-encoding should not allow token-collision rewrites in user data
+	t.is(
+		normalizeUrl('https://example.com/?broken=%E0%A4&literal=%5F%5Fnormalize_url_encoded_reserved__2F&token=a%2Fb'),
+		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__2F&token=a%2Fb'
+	);
+	t.is(
+		normalizeUrl('https://example.com/?broken=%E0%A4&literal=%5F%5Fnormalize_url_encoded_reserved__0__2F&token=a%2Fb'),
+		'https://example.com/?broken=%EF%BF%BD&literal=__normalize_url_encoded_reserved__0__2F&token=a%2Fb'
+	);
+
+	const longPadding = '_'.repeat(4000);
+	t.is(
+		normalizeUrl(`https://example.com/?token=a%2Fb&literal=${longPadding}__normalize_url_encoded_reserved__${longPadding}`),
+		`https://example.com/?literal=${longPadding}__normalize_url_encoded_reserved__${longPadding}&token=a%2Fb`
+	);
+});
+
 test('emptyQueryValue option', t => {
 	// Default 'preserve' behavior - keeps original format
 	t.is(normalizeUrl('https://example.com?key'), 'https://example.com/?key');
@@ -659,10 +727,10 @@ test('emptyQueryValue option', t => {
 	t.is(normalizeUrl('https://example.com?key=a=b=c'), 'https://example.com/?key=a=b=c');
 	t.is(normalizeUrl('https://example.com?data=abc=='), 'https://example.com/?data=abc==');
 
-	// Encoded = (%3D) in values gets decoded (= is safe unencoded in values)
-	t.is(normalizeUrl('https://example.com?key=val%3Due'), 'https://example.com/?key=val=ue');
-	t.is(normalizeUrl('https://example.com?key=%3D'), 'https://example.com/?key==');
-	t.is(normalizeUrl('https://example.com?key=val%3Due', {sortQueryParameters: false}), 'https://example.com/?key=val=ue');
+	// Encoded = (%3D) in values is preserved
+	t.is(normalizeUrl('https://example.com?key=val%3Due'), 'https://example.com/?key=val%3Due');
+	t.is(normalizeUrl('https://example.com?key=%3D'), 'https://example.com/?key=%3D');
+	t.is(normalizeUrl('https://example.com?key=val%3Due', {sortQueryParameters: false}), 'https://example.com/?key=val%3Due');
 
 	// All params removed leaves no query string
 	t.is(normalizeUrl('https://example.com?utm_source=test&utm_medium=web'), 'https://example.com');
