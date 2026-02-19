@@ -25,16 +25,28 @@ const supportedProtocols = new Set([
 	'file:',
 ]);
 
-const hasCustomProtocol = urlString => {
+const normalizeCustomProtocolOption = protocol => {
+	if (typeof protocol !== 'string') {
+		return undefined;
+	}
+
+	const normalizedProtocol = protocol.trim().toLowerCase().replace(/:$/, '');
+	return normalizedProtocol === '' ? undefined : `${normalizedProtocol}:`;
+};
+
+const getCustomProtocol = urlString => {
 	try {
 		const {protocol} = new URL(urlString);
+		const hasAuthority = urlString.slice(0, protocol.length + 2).toLowerCase() === `${protocol}//`;
 
-		return protocol.endsWith(':')
-			&& !protocol.includes('.')
-			&& !supportedProtocols.has(protocol);
-	} catch {
-		return false;
-	}
+		if (protocol.endsWith(':')
+			&& (!protocol.includes('.') || hasAuthority)
+			&& !supportedProtocols.has(protocol)) {
+			return protocol;
+		}
+	} catch {}
+
+	return undefined;
 };
 
 const decodeQueryKey = value => {
@@ -246,7 +258,15 @@ export default function normalizeUrl(urlString, options) {
 		return normalizeDataURL(urlString, options);
 	}
 
-	if (hasCustomProtocol(urlString)) {
+	const customProtocols = Array.isArray(options.customProtocols) ? options.customProtocols : [];
+	const normalizedCustomProtocols = new Set(
+		customProtocols
+			.map(protocol => normalizeCustomProtocolOption(protocol))
+			.filter(Boolean),
+	);
+
+	const customProtocol = getCustomProtocol(urlString);
+	if (customProtocol && !normalizedCustomProtocols.has(customProtocol)) {
 		return urlString;
 	}
 
@@ -254,7 +274,7 @@ export default function normalizeUrl(urlString, options) {
 	const isRelativeUrl = !hasRelativeProtocol && /^\.*\//.test(urlString);
 
 	// Prepend protocol
-	if (!isRelativeUrl) {
+	if (!isRelativeUrl && !customProtocol) {
 		urlString = urlString.replace(/^(?!(?:\w+:)?\/\/)|^\/\//, options.defaultProtocol);
 	}
 

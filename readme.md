@@ -28,7 +28,7 @@ normalizeUrl('//www.sindresorhus.com:80/../baz?b=bar&a=foo');
 
 ### normalizeUrl(url, options?)
 
-URLs with custom protocols are not normalized and just passed through by default. Supported protocols are: `https`, `http`, `file`, and `data`.
+URLs with custom protocols are not normalized and just passed through by default. Supported protocols are: `https`, `http`, `file`, and `data`. Use the [`customProtocols`](#customprotocols) option to add support for additional protocols.
 
 Human-friendly URLs with basic auth (for example, `user:password@sindresorhus.com`) are not handled because basic auth conflicts with custom protocols. [Basic auth URLs are also deprecated.](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication#access_using_credentials_in_the_url)
 
@@ -47,6 +47,25 @@ Type: `object`
 Type: `string`\
 Default: `'http'`\
 Values: `'https' | 'http'`
+
+##### customProtocols
+
+Type: `string[]`\
+Default: `undefined`
+
+Protocols to normalize in addition to the built-in ones (`https`, `http`, `file`, `data`).
+
+Useful for HTTP-like custom protocols such as Electron schemes or app-specific protocols.
+
+The protocols should be specified without `:`.
+
+```js
+normalizeUrl('sindre://www.sorhus.com', {customProtocols: ['sindre']});
+//=> 'sindre://sorhus.com'
+
+normalizeUrl('sindre://www.sorhus.com/foo/', {customProtocols: ['sindre']});
+//=> 'sindre://sorhus.com/foo'
+```
 
 ##### normalizeProtocol
 

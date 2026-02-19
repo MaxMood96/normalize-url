@@ -35,9 +35,6 @@ test('main', t => {
 	t.is(normalizeUrl('http://sindresorhus.com/foo#bar:~:text=hello%20world', {stripHash: true}), 'http://sindresorhus.com/foo');
 	t.is(normalizeUrl('http://sindresorhus.com/foo/bar/../baz'), 'http://sindresorhus.com/foo/baz');
 	t.is(normalizeUrl('http://sindresorhus.com/foo/bar/./baz'), 'http://sindresorhus.com/foo/bar/baz');
-	// t.is(normalizeUrl('sindre://www.sorhus.com'), 'sindre://sorhus.com');
-	// t.is(normalizeUrl('sindre://www.sorhus.com/'), 'sindre://sorhus.com');
-	// t.is(normalizeUrl('sindre://www.sorhus.com/foo/bar'), 'sindre://sorhus.com/foo/bar');
 	t.is(normalizeUrl('https://i.vimeocdn.com/filter/overlay?src0=https://i.vimeocdn.com/video/598160082_1280x720.jpg&src1=https://f.vimeocdn.com/images_v6/share/play_icon_overlay.png'), 'https://i.vimeocdn.com/filter/overlay?src0=https://i.vimeocdn.com/video/598160082_1280x720.jpg&src1=https://f.vimeocdn.com/images_v6/share/play_icon_overlay.png');
 	t.is(normalizeUrl('sindresorhus.com:123'), 'http://sindresorhus.com:123');
 });
@@ -56,14 +53,12 @@ test('stripAuthentication option', t => {
 	t.is(normalizeUrl('https://user:password@www.sindresorhus.com'), 'https://sindresorhus.com');
 	t.is(normalizeUrl('https://user:password@www.sindresorhus.com/@user'), 'https://sindresorhus.com/@user');
 	t.is(normalizeUrl('http://user:password@www.êxample.com'), 'http://xn--xample-hva.com');
-	// t.is(normalizeUrl('sindre://user:password@www.sorhus.com'), 'sindre://sorhus.com');
 
 	const options = {stripAuthentication: false};
 	t.is(normalizeUrl('http://user:password@www.sindresorhus.com', options), 'http://user:password@sindresorhus.com');
 	t.is(normalizeUrl('https://user:password@www.sindresorhus.com', options), 'https://user:password@sindresorhus.com');
 	t.is(normalizeUrl('https://user:password@www.sindresorhus.com/@user', options), 'https://user:password@sindresorhus.com/@user');
 	t.is(normalizeUrl('http://user:password@www.êxample.com', options), 'http://user:password@xn--xample-hva.com');
-	// t.is(normalizeUrl('sindre://user:password@www.sorhus.com', options), 'sindre://user:password@sorhus.com');
 });
 
 test('stripProtocol option', t => {
@@ -102,7 +97,6 @@ test('stripWWW option', t => {
 	t.is(normalizeUrl('http://www.sindresorhus.com', options), 'http://www.sindresorhus.com');
 	t.is(normalizeUrl('www.sindresorhus.com', options), 'http://www.sindresorhus.com');
 	t.is(normalizeUrl('http://www.êxample.com', options), 'http://www.xn--xample-hva.com');
-	// t.is(normalizeUrl('sindre://www.sorhus.com', options), 'sindre://www.sorhus.com');
 
 	const options2 = {stripWWW: true};
 	t.is(normalizeUrl('http://www.vue.amsterdam', options2), 'http://vue.amsterdam');
@@ -110,16 +104,16 @@ test('stripWWW option', t => {
 
 	const tooLongTLDURL = 'http://www.sorhus.' + ''.padEnd(64, 'a');
 	t.is(normalizeUrl(tooLongTLDURL, options2), tooLongTLDURL);
-	
+
 	// Issue #109 - Should strip www from multi-level subdomains
 	t.is(normalizeUrl('www.unix.stackexchange.com'), 'http://unix.stackexchange.com');
 	t.is(normalizeUrl('https://www.unix.stackexchange.com'), 'https://unix.stackexchange.com');
 	t.is(normalizeUrl('www.api.example.com'), 'http://api.example.com');
-	
+
 	// Issue #38 - Should NOT strip www when it would break the domain
 	t.is(normalizeUrl('www.com'), 'http://www.com');
 	t.is(normalizeUrl('https://www.com'), 'https://www.com');
-	
+
 	// Edge case: www.www.com should NOT be stripped (intentional behavior)
 	t.is(normalizeUrl('www.www.com'), 'http://www.www.com');
 	t.is(normalizeUrl('www.www.example.com'), 'http://www.www.example.com');
@@ -479,7 +473,105 @@ test('ignore custom schemes', t => {
 	t.is(normalizeUrl('tel:004346382763'), 'tel:004346382763');
 	t.is(normalizeUrl('mailto:office@foo.com'), 'mailto:office@foo.com');
 	t.is(normalizeUrl('sindre://www.sindresorhus.com'), 'sindre://www.sindresorhus.com');
+	t.is(normalizeUrl('foo.bar://www.example.com'), 'foo.bar://www.example.com');
 	t.is(normalizeUrl('foo:bar'), 'foo:bar');
+
+	// Opt-in via customProtocols
+	t.is(normalizeUrl('sindre://www.sindresorhus.com', {customProtocols: ['sindre']}), 'sindre://sindresorhus.com');
+});
+
+test('customProtocols option', t => {
+	const options = {customProtocols: ['sindre']};
+
+	// Basic normalization
+	t.is(normalizeUrl('sindre://www.sorhus.com', options), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://www.sorhus.com/', options), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://www.sorhus.com/foo/bar', options), 'sindre://sorhus.com/foo/bar');
+
+	// Auth stripping
+	t.is(normalizeUrl('sindre://user:password@www.sorhus.com', options), 'sindre://sorhus.com');
+
+	// Trailing slash removal
+	t.is(normalizeUrl('sindre://sorhus.com/foo/', options), 'sindre://sorhus.com/foo');
+
+	// Query sorting
+	t.is(normalizeUrl('sindre://sorhus.com?b=two&a=one', options), 'sindre://sorhus.com?a=one&b=two');
+
+	// Hash handling
+	t.is(normalizeUrl('sindre://sorhus.com/foo#bar', options), 'sindre://sorhus.com/foo#bar');
+	t.is(normalizeUrl('sindre://sorhus.com/foo#bar', {...options, stripHash: true}), 'sindre://sorhus.com/foo');
+
+	// Default UTM stripping applies
+	t.is(normalizeUrl('sindre://sorhus.com?foo=bar&utm_source=test', options), 'sindre://sorhus.com?foo=bar');
+
+	// Duplicate slashes in pathname
+	t.is(normalizeUrl('sindre://sorhus.com//foo//bar', options), 'sindre://sorhus.com/foo/bar');
+
+	// URI decoding of pathname
+	t.is(normalizeUrl('sindre://sorhus.com/%7Efoo/', options), 'sindre://sorhus.com/~foo');
+
+	// Empty customProtocols array behaves like not providing the option
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: []}), 'sindre://www.sorhus.com');
+
+	// Unmatched protocols still pass through
+	t.is(normalizeUrl('other://www.sorhus.com', options), 'other://www.sorhus.com');
+	t.is(normalizeUrl('tel:004346382763', options), 'tel:004346382763');
+
+	// Multiple custom protocols
+	const multiOptions = {customProtocols: ['sindre', 'app']};
+	t.is(normalizeUrl('sindre://www.sorhus.com', multiOptions), 'sindre://sorhus.com');
+	t.is(normalizeUrl('app://www.sorhus.com', multiOptions), 'app://sorhus.com');
+	t.is(normalizeUrl('other://www.sorhus.com', multiOptions), 'other://www.sorhus.com');
+
+	// Dotted protocol names
+	t.is(normalizeUrl('foo.bar://www.example.com', {customProtocols: ['foo.bar']}), 'foo.bar://example.com');
+	t.is(normalizeUrl('FOO.BAR://www.example.com', {customProtocols: ['foo.bar']}), 'foo.bar://example.com');
+
+	// forceHttp/forceHttps don't affect custom protocols
+	t.is(normalizeUrl('sindre://sorhus.com', {...options, forceHttp: true}), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://sorhus.com', {...options, forceHttps: true}), 'sindre://sorhus.com');
+
+	// stripProtocol doesn't affect custom protocols
+	t.is(normalizeUrl('sindre://sorhus.com', {...options, stripProtocol: true}), 'sindre://sorhus.com');
+
+	// Port handling
+	t.is(normalizeUrl('sindre://sorhus.com:8080', options), 'sindre://sorhus.com:8080');
+	t.is(normalizeUrl('sindre://sorhus.com:8080/foo', {...options, removeExplicitPort: true}), 'sindre://sorhus.com/foo');
+
+	// Case-insensitive protocol matching
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: ['SINDRE']}), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: ['Sindre']}), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: ['sindre:']}), 'sindre://sorhus.com');
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: [' sindre ']}), 'sindre://sorhus.com');
+
+	// Invalid entries are ignored
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: ['sindre', 123]}), 'sindre://sorhus.com');
+
+	// Invalid option type is ignored
+	t.is(normalizeUrl('sindre://www.sorhus.com', {customProtocols: 'sindre'}), 'sindre://www.sorhus.com');
+
+	// Path traversal
+	t.is(normalizeUrl('sindre://sorhus.com/foo/../bar', options), 'sindre://sorhus.com/bar');
+	t.is(normalizeUrl('sindre://sorhus.com/foo/./bar', options), 'sindre://sorhus.com/foo/bar');
+
+	// Auth stripping with stripAuthentication: false
+	t.is(normalizeUrl('sindre://user:password@www.sorhus.com', {...options, stripAuthentication: false}), 'sindre://user:password@sorhus.com');
+
+	// stripWWW: false
+	t.is(normalizeUrl('sindre://www.sorhus.com', {...options, stripWWW: false}), 'sindre://www.sorhus.com');
+
+	// removeTrailingSlash: false
+	t.is(normalizeUrl('sindre://sorhus.com/foo/', {...options, removeTrailingSlash: false}), 'sindre://sorhus.com/foo/');
+
+	// removeQueryParameters: true removes all query params
+	t.is(normalizeUrl('sindre://sorhus.com?foo=bar', {...options, removeQueryParameters: true}), 'sindre://sorhus.com');
+
+	// keepQueryParameters
+	t.is(normalizeUrl('sindre://sorhus.com?foo=bar&baz=qux', {...options, keepQueryParameters: ['foo']}), 'sindre://sorhus.com?foo=bar');
+
+	// Built-in protocols still work normally
+	t.is(normalizeUrl('http://www.sorhus.com', options), 'http://sorhus.com');
+	t.is(normalizeUrl('https://www.sorhus.com', options), 'https://sorhus.com');
 });
 
 test('encoded backslashes do not get decoded', t => {
@@ -497,7 +589,7 @@ test('removePath option', t => {
 	t.is(normalizeUrl('https://example.com/path/to/page#hash', {removePath: true}), 'https://example.com/#hash');
 	t.is(normalizeUrl('https://example.com/', {removePath: true}), 'https://example.com');
 	t.is(normalizeUrl('https://example.com', {removePath: true}), 'https://example.com');
-	
+
 	// With other options
 	t.is(normalizeUrl('https://example.com/path/', {removePath: true, removeTrailingSlash: true}), 'https://example.com');
 	t.is(normalizeUrl('https://www.example.com/path', {removePath: true, stripWWW: true}), 'https://example.com');
@@ -509,12 +601,12 @@ test('transformPath option', t => {
 	t.is(normalizeUrl('https://example.com/api/v1/users', {transformPath: keepFirst}), 'https://example.com/api');
 	t.is(normalizeUrl('https://example.com/path/to/page', {transformPath: keepFirst}), 'https://example.com/path');
 	t.is(normalizeUrl('https://example.com/', {transformPath: keepFirst}), 'https://example.com');
-	
+
 	// Function: Remove specific component
 	const removeAdmin = pathComponents => pathComponents.filter(c => c !== 'admin');
 	t.is(normalizeUrl('https://example.com/admin/users', {transformPath: removeAdmin}), 'https://example.com/users');
 	t.is(normalizeUrl('https://example.com/path/admin/page', {transformPath: removeAdmin}), 'https://example.com/path/page');
-	
+
 	// Function: Custom logic
 	const customLogic = pathComponents => {
 		if (pathComponents[0] === 'api') {
@@ -524,12 +616,12 @@ test('transformPath option', t => {
 	};
 	t.is(normalizeUrl('https://example.com/api/v1/users', {transformPath: customLogic}), 'https://example.com/api');
 	t.is(normalizeUrl('https://example.com/other/path', {transformPath: customLogic}), 'https://example.com');
-	
+
 	// Edge cases
 	t.is(normalizeUrl('https://example.com/path', {transformPath: () => []}), 'https://example.com');
 	t.is(normalizeUrl('https://example.com/path', {transformPath: () => null}), 'https://example.com');
 	t.is(normalizeUrl('https://example.com/path', {transformPath: () => undefined}), 'https://example.com');
-	
+
 	// Combining with removePath (removePath should take precedence)
 	t.is(normalizeUrl('https://example.com/path/to/page', {
 		removePath: true,
@@ -546,23 +638,23 @@ test('path-like query strings without equals signs are preserved', t => {
 	t.is(normalizeUrl('https://example.com/index.php?/path/'), 'https://example.com/index.php?/path');
 	// With removeTrailingSlash disabled, trailing slash is preserved
 	t.is(normalizeUrl('https://example.com/index.php?/path/', {removeTrailingSlash: false}), 'https://example.com/index.php?/path/');
-	
+
 	// Mixed parameters: path-like without '=' and regular with '='
 	t.is(normalizeUrl('https://example.com/index.php?b=2&/path/to/resource&a=1'), 'https://example.com/index.php?/path/to/resource&a=1&b=2');
 	t.is(normalizeUrl('https://example.com/index.php?/path&param=value'), 'https://example.com/index.php?/path&param=value');
-	
+
 	// Regular parameters with empty values should keep '='
 	t.is(normalizeUrl('https://example.com/index.php?key='), 'https://example.com/index.php?key=');
 	t.is(normalizeUrl('https://example.com/index.php?key=&another='), 'https://example.com/index.php?another=&key=');
-	
+
 	// Parameters without values should not get '=' added
 	t.is(normalizeUrl('https://example.com/index.php?key'), 'https://example.com/index.php?key');
 	t.is(normalizeUrl('https://example.com/index.php?a&b&c'), 'https://example.com/index.php?a&b&c');
-	
+
 	// With sortQueryParameters disabled, original format is preserved
 	t.is(normalizeUrl('https://example.com/index.php?/Some/Route/To/Path/12345', {sortQueryParameters: false}), 'https://example.com/index.php?/Some/Route/To/Path/12345');
 	t.is(normalizeUrl('https://example.com/index.php?key', {sortQueryParameters: false}), 'https://example.com/index.php?key');
-	
+
 	// Safety: parameters with similar names should not interfere with each other
 	t.is(normalizeUrl('https://example.com/index.php?/path&/longpath'), 'https://example.com/index.php?/longpath&/path');
 	t.is(normalizeUrl('https://example.com/index.php?key&anotherkey'), 'https://example.com/index.php?anotherkey&key');
